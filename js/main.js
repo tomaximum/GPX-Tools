@@ -252,9 +252,9 @@ function renderOnMap(data) {
     activeLayers = {};
 
     const styles = {
-        common: { color: '#95a5a6', weight: 4, opacity: 0.8 },
-        new: { color: '#2ecc71', weight: 5, opacity: 1 },
-        deleted: { color: '#e74c3c', weight: 5, opacity: 1 }
+        common: { color: '#95a5a6', weight: 2, opacity: 0.4 },
+        new: { color: '#2ecc71', weight: 6, opacity: 1 },
+        deleted: { color: '#e74c3c', weight: 6, opacity: 1 }
     };
 
     const pointStyle = (color) => ({ radius: 6, fillColor: color, color: "#fff", weight: 1, opacity: 1, fillOpacity: 0.8 });
@@ -269,10 +269,19 @@ function renderOnMap(data) {
         pointToLayer: (f, latlng) => L.circleMarker(latlng, pointStyle(styles.new.color))
     }).addTo(map);
 
-    if (data.deleted) activeLayers.deleted = L.geoJSON(data.deleted, { 
-        style: styles.deleted,
-        pointToLayer: (f, latlng) => L.circleMarker(latlng, pointStyle(styles.deleted.color))
-    }).addTo(map);
+    if (data.deleted) {
+        activeLayers.deleted = L.geoJSON(data.deleted, { 
+            style: styles.deleted,
+            pointToLayer: (f, latlng) => L.circleMarker(latlng, pointStyle(styles.deleted.color))
+        }).addTo(map).bringToFront();
+    }
+
+    if (data.new) {
+        activeLayers.new = L.geoJSON(data.new, { 
+            style: styles.new,
+            pointToLayer: (f, latlng) => L.circleMarker(latlng, pointStyle(styles.new.color))
+        }).addTo(map).bringToFront();
+    }
 
     const combined = L.featureGroup(Object.values(activeLayers));
     if (combined.getLayers().length > 0) {

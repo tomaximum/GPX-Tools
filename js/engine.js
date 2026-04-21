@@ -1,6 +1,6 @@
 /**
  * GPX Smart Diff - Geospatial Engine (Turf.js) Optimized
- * VERSION 3.3.0 - Multi-Segment Geometry Fix
+ * VERSION 3.5.0 - Professional Smoothing & Performance
  */
 
 export function compareGPX(traceA, traceB, options) {
@@ -19,14 +19,14 @@ export function compareGPX(traceA, traceB, options) {
 
         if (lineA && lineB) {
             if (options.absoluteMode) {
-                results.new = getAbsoluteDifference(lineB, lineA);
-                results.deleted = getAbsoluteDifference(lineA, lineB);
-                results.common = getAbsoluteIntersection(lineB, lineA);
+                // Absolute mode still needs a little gap filling for presentation
+                results.new = cleanAndMergeSegments(getAbsoluteDifference(lineB, lineA));
+                results.deleted = cleanAndMergeSegments(getAbsoluteDifference(lineA, lineB));
+                results.common = cleanAndMergeSegments(getAbsoluteIntersection(lineB, lineA));
             } else {
-                // Use raw lines for maximum precision, no simplify.
-                results.new = cleanSegments(getDifferenceOptimized(lineB, lineA, toleranceKm));
-                results.deleted = cleanSegments(getDifferenceOptimized(lineA, lineB, toleranceKm));
-                results.common = cleanSegments(getIntersectionOptimized(lineB, lineA, toleranceKm));
+                results.new = cleanAndMergeSegments(getDifferenceOptimized(lineB, lineA, toleranceKm));
+                results.deleted = cleanAndMergeSegments(getDifferenceOptimized(lineA, lineB, toleranceKm));
+                results.common = cleanAndMergeSegments(getIntersectionOptimized(lineB, lineA, toleranceKm));
             }
         }
     }
@@ -52,9 +52,6 @@ export function compareGPX(traceA, traceB, options) {
     return results;
 }
 
-/**
- * FIXED: Correct construction of MultiLineString coordinates
- */
 function extractMainLine(geojson) {
     const features = geojson.features.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
     if (features.length === 0) return null;
@@ -76,18 +73,44 @@ function extractMainLine(geojson) {
 }
 
 /**
- * Filter tiny segments (noise)
+ * Advanced Cleaning: Discard artifacts and merge close segments
  */
-function cleanSegments(featureCollection) {
-    if (!featureCollection) return null;
-    const MIN_LENGTH_KM = 0.005; // 5 meters (more permissive)
+function cleanAndMergeSegments(featureCollection) {
+    if (!featureCollection || featureCollection.features.length === 0) return null;
     
-    const validFeatures = featureCollection.features.filter(f => {
-        const len = turf.length(f, { units: 'kilometers' });
-        return len > MIN_LENGTH_KM;
+    const MIN_LENGTH_KM = 0.05; // 50 meters for pro rendering
+    const JOIN_DISTANCE_KM = 0.1; // 100 meters to bridge gaps
+
+    // 1. Remove tiny noise
+    let features = featureCollection.features.filter(f => {
+        return turf.length(f, { units: 'kilometers' }) > MIN_LENGTH_KM;
     });
 
-    return validFeatures.length > 0 ? turf.featureCollection(validFeatures) : null;
+    if (features.length === 0) return null;
+
+    // 2. Greedy Merge (Simple version)
+    const merged = [];
+    let current = features[0];
+
+    for (let i = 1; i < features.length; i++) {
+        const next = features[i];
+        const lastCoord = current.geometry.coordinates[current.geometry.coordinates.length - 1];
+        const firstCoord = next.geometry.coordinates[0];
+        
+        const gap = turf.distance(lastCoord, firstCoord, { units: 'kilometers' });
+
+        if (gap < JOIN_DISTANCE_KM) {
+            // Join them
+            const newCoords = [...current.geometry.coordinates, ...next.geometry.coordinates];
+            current = turf.lineString(newCoords);
+        } else {
+            merged.push(current);
+            current = next;
+        }
+    }
+    merged.push(current);
+
+    return turf.featureCollection(merged);
 }
 
 function getAbsoluteDifference(lineTarget, lineReference) {
@@ -133,7 +156,6 @@ function getAbsoluteIntersection(lineTarget, lineReference) {
 }
 
 function getFlatCoords(geometry) {
-    if (geometry.getGeom) geometry = geometry.getGeom(); // Handle feature vs geometry
     const geom = geometry.geometry || geometry;
     if (geom.type === 'LineString') return geom.coordinates;
     if (geom.type === 'MultiLineString') return geom.coordinates.flat(1);
@@ -141,12 +163,13 @@ function getFlatCoords(geometry) {
 }
 
 function getDifferenceOptimized(lineTarget, lineReference, toleranceKm) {
+    const refGeom = lineReference.geometry || lineReference;
     const points = turf.explode(lineTarget);
     const segments = [];
     let currentSegment = [];
 
     points.features.forEach((pt) => {
-        const dist = turf.pointToLineDistance(pt, lineReference, { units: 'kilometers' });
+        const dist = turf.pointToLineDistance(pt, refGeom, { units: 'kilometers' });
         const isInside = dist <= toleranceKm;
         
         if (!isInside) {
@@ -162,12 +185,13 @@ function getDifferenceOptimized(lineTarget, lineReference, toleranceKm) {
 }
 
 function getIntersectionOptimized(lineTarget, lineReference, toleranceKm) {
+    const refGeom = lineReference.geometry || lineReference;
     const points = turf.explode(lineTarget);
     const segments = [];
     let currentSegment = [];
 
     points.features.forEach((pt) => {
-        const dist = turf.pointToLineDistance(pt, lineReference, { units: 'kilometers' });
+        const dist = turf.pointToLineDistance(pt, refGeom, { units: 'kilometers' });
         const isInside = dist <= toleranceKm;
         
         if (isInside) {
