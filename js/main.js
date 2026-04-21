@@ -164,17 +164,17 @@ function renderSegments(container, segments, type) {
             card.classList.toggle('selected', seg.selected);
         });
 
-        card.addEventListener('mouseenter', () => highlightOnMap(seg.feature));
+        card.addEventListener('mouseenter', () => highlightOnMap(seg.feature, type === 'A' ? '#e74c3c' : '#2ecc71'));
         card.addEventListener('mouseleave', () => clearHighlight());
 
         container.appendChild(card);
     });
 }
 
-function highlightOnMap(feature) {
+function highlightOnMap(feature, color) {
     clearHighlight();
     hoverLayer = L.geoJSON(feature, {
-        style: { color: '#3498db', weight: 8, opacity: 0.6 }
+        style: { color: color, weight: 8, opacity: 0.6 }
     }).addTo(map);
 }
 

@@ -132,8 +132,13 @@ body, html {
 
 .segment-card.selected {
     border-color: var(--accent);
-    background: rgba(243, 156, 18, 0.05);
 }
+
+.segment-list#list-a .segment-card.selected { border-color: #e74c3c; background: rgba(231, 76, 60, 0.05); }
+.segment-list#list-b .segment-card.selected { border-color: #2ecc71; background: rgba(46, 204, 113, 0.05); }
+
+.segment-list#list-a .segment-card input[type="checkbox"] { accent-color: #e74c3c; }
+.segment-list#list-b .segment-card input[type="checkbox"] { accent-color: #2ecc71; }
 
 .segment-card .seg-info {
     flex: 1;
