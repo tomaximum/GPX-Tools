@@ -50,15 +50,13 @@ function initMap() {
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
     const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17 });
     const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
-    const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 });
 
-    dark.addTo(map); // Default
+    osm.addTo(map); // Default
 
     const baseMaps = {
-        "Sombre": dark,
+        "OpenStreetMap": osm,
         "Satellite": satellite,
-        "Topograhique": topo,
-        "OpenStreetMap": osm
+        "Topographe": topo
     };
 
     L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
