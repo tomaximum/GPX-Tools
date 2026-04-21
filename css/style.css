@@ -297,3 +297,26 @@ input:checked + .slider:before { transform: translateX(20px); }
         width: 100vw;
     }
 }
+
+/* Loading State Overlay */
+.sidebar.is-loading::after {
+    content: "Analyse en cours...";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10, 11, 13, 0.8);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 1.1rem;
+    z-index: 2000;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}

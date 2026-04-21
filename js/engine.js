@@ -1,5 +1,5 @@
 /**
- * GPX Smart Diff - Geospatial Engine (Turf.js)
+ * GPX Smart Diff - Geospatial Engine (Turf.js) Optimized
  */
 
 export function compareGPX(traceA, traceB, options) {
@@ -13,19 +13,23 @@ export function compareGPX(traceA, traceB, options) {
     const toleranceKm = options.tolerance / 1000;
 
     if (options.analyzeTracks) {
-        // Prepare LineStrings
         const lineA = extractMainLine(traceA);
         const lineB = extractMainLine(traceB);
 
         if (lineA && lineB) {
+            // Optimization: Simplify the reference lines for the distance calculation
+            // This massively speeds up O(N*M) operations without losing much precision for diff
+            const simplifiedA = turf.simplify(lineA, { tolerance: 0.001, highQuality: false }); // ~1m tolerance
+            const simplifiedB = turf.simplify(lineB, { tolerance: 0.001, highQuality: false });
+
             // New segments (Parts of B not in A)
-            results.new = getDifference(lineB, lineA, toleranceKm);
+            results.new = getDifferenceOptimized(lineB, simplifiedA, toleranceKm);
             
             // Deleted segments (Parts of A not in B)
-            results.deleted = getDifference(lineA, lineB, toleranceKm);
+            results.deleted = getDifferenceOptimized(lineA, simplifiedB, toleranceKm);
             
             // Common segments (Parts of B that are in A)
-            results.common = getIntersection(lineB, lineA, toleranceKm);
+            results.common = getIntersectionOptimized(lineB, simplifiedA, toleranceKm);
         }
     }
 
@@ -36,7 +40,6 @@ export function compareGPX(traceA, traceB, options) {
         if (wptsB.length > 0 || wptsA.length > 0) {
             results.waypoints = comparePoints(wptsA, wptsB, toleranceKm);
             
-            // Merge with track results for export buttons
             if (results.new) results.new.features.push(...results.waypoints.new.features);
             else results.new = results.waypoints.new;
 
@@ -51,66 +54,26 @@ export function compareGPX(traceA, traceB, options) {
     return results;
 }
 
-function comparePoints(wptsA, wptsB, toleranceKm) {
-    const res = {
-        new: turf.featureCollection([]),
-        deleted: turf.featureCollection([]),
-        common: turf.featureCollection([])
-    };
-
-    // Find New and Common in B
-    wptsB.forEach(pB => {
-        let found = false;
-        for (const pA of wptsA) {
-            if (turf.distance(pB, pA, { units: 'kilometers' }) <= toleranceKm) {
-                found = true;
-                break;
-            }
-        }
-        if (found) res.common.features.push(pB);
-        else res.new.features.push(pB);
-    });
-
-    // Find Deleted in A
-    wptsA.forEach(pA => {
-        let found = false;
-        for (const pB of wptsB) {
-            if (turf.distance(pA, pB, { units: 'kilometers' }) <= toleranceKm) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) res.deleted.features.push(pA);
-    });
-
-    return res;
-}
-
 function extractMainLine(geojson) {
     const lines = geojson.features.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
     if (lines.length === 0) return null;
-    
-    // Combine if multiple lines
     if (lines.length === 1) return lines[0];
-    
     const coords = lines.flatMap(l => l.geometry.coordinates);
     return turf.lineString(coords);
 }
 
 /**
- * Returns segments of lineTarget that are NOT within tolerance of lineReference
+ * Faster comparison using Point-to-Line distance instead of Buffer
  */
-function getDifference(lineTarget, lineReference, toleranceKm) {
-    const buffer = turf.buffer(lineReference, toleranceKm, { units: 'kilometers' });
-    
-    // Turf.lineSplit + filtering is often buggy with complex lines.
-    // Better: Point-based segmentation.
+function getDifferenceOptimized(lineTarget, lineReference, toleranceKm) {
     const points = turf.explode(lineTarget);
     const segments = [];
     let currentSegment = [];
 
     points.features.forEach((pt) => {
-        const isInside = turf.booleanPointInPolygon(pt, buffer);
+        // Point To Line Distance is O(M)
+        const dist = turf.pointToLineDistance(pt, lineReference, { units: 'kilometers' });
+        const isInside = dist <= toleranceKm;
         
         if (!isInside) {
             currentSegment.push(pt.geometry.coordinates);
@@ -123,21 +86,17 @@ function getDifference(lineTarget, lineReference, toleranceKm) {
     });
 
     if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
-    
     return segments.length > 0 ? turf.featureCollection(segments) : null;
 }
 
-/**
- * Returns segments of lineTarget that ARE within tolerance of lineReference
- */
-function getIntersection(lineTarget, lineReference, toleranceKm) {
-    const buffer = turf.buffer(lineReference, toleranceKm, { units: 'kilometers' });
+function getIntersectionOptimized(lineTarget, lineReference, toleranceKm) {
     const points = turf.explode(lineTarget);
     const segments = [];
     let currentSegment = [];
 
     points.features.forEach((pt) => {
-        const isInside = turf.booleanPointInPolygon(pt, buffer);
+        const dist = turf.pointToLineDistance(pt, lineReference, { units: 'kilometers' });
+        const isInside = dist <= toleranceKm;
         
         if (isInside) {
             currentSegment.push(pt.geometry.coordinates);
@@ -150,6 +109,38 @@ function getIntersection(lineTarget, lineReference, toleranceKm) {
     });
 
     if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
-    
     return segments.length > 0 ? turf.featureCollection(segments) : null;
+}
+
+function comparePoints(wptsA, wptsB, toleranceKm) {
+    const res = {
+        new: turf.featureCollection([]),
+        deleted: turf.featureCollection([]),
+        common: turf.featureCollection([])
+    };
+
+    wptsB.forEach(pB => {
+        let found = false;
+        for (const pA of wptsA) {
+            if (turf.distance(pB, pA, { units: 'kilometers' }) <= toleranceKm) {
+                found = true;
+                break;
+            }
+        }
+        if (found) res.common.features.push(pB);
+        else res.new.features.push(pB);
+    });
+
+    wptsA.forEach(pA => {
+        let found = false;
+        for (const pB of wptsB) {
+            if (turf.distance(pA, pB, { units: 'kilometers' }) <= toleranceKm) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) res.deleted.features.push(pA);
+    });
+
+    return res;
 }

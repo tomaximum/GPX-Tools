@@ -120,20 +120,32 @@ async function handleFile(file, type) {
 async function runAnalysis() {
     if (!traceA || !traceB) return;
 
-    const options = {
-        tolerance: parseInt(UI.tolerance.value),
-        analyzeTracks: UI.toggleTracks.checked,
-        analyzeWpts: UI.toggleWpt.checked
-    };
-
-    diffData = compareGPX(traceA, traceB, options);
-    renderOnMap(diffData);
-    updateStats(traceA, traceB);
+    // Show loading state
+    UI.sidebar.classList.add('is-loading');
     
-    // Enable Exports
-    UI.btnNew.disabled = !diffData.new;
-    UI.btnDel.disabled = !diffData.deleted;
-    UI.btnCom.disabled = !diffData.common;
+    // Give browser time to render loading state
+    setTimeout(() => {
+        const options = {
+            tolerance: parseInt(UI.tolerance.value),
+            analyzeTracks: UI.toggleTracks.checked,
+            analyzeWpts: UI.toggleWpt.checked
+        };
+
+        try {
+            diffData = compareGPX(traceA, traceB, options);
+            renderOnMap(diffData);
+            updateStats(traceA, traceB);
+
+            // Enable Exports
+            UI.btnNew.disabled = !(diffData && diffData.new);
+            UI.btnDel.disabled = !(diffData && diffData.deleted);
+            UI.btnCom.disabled = !(diffData && diffData.common);
+        } catch (e) {
+            console.error("Analysis failed", e);
+        } finally {
+            UI.sidebar.classList.remove('is-loading');
+        }
+    }, 50);
 }
 
 function renderOnMap(data) {
