@@ -22,6 +22,8 @@ const UI = {
     btnDel: document.getElementById('exp-del'),
     btnCom: document.getElementById('exp-com'),
     btnRun: document.getElementById('btn-run'),
+    toggleAbs: document.getElementById('toggle-absolute'),
+    tolBox: document.getElementById('tolerance-box'),
     mobileToggle: document.getElementById('mobile-toggle'),
     sidebar: document.getElementById('sidebar'),
     statsCard: document.getElementById('stats-card'),
@@ -84,6 +86,11 @@ function initListeners() {
         UI.tolVal.innerText = e.target.value + 'm';
     });
 
+    UI.toggleAbs.addEventListener('change', (e) => {
+        UI.tolBox.style.opacity = e.target.checked ? '0.3' : '1';
+        UI.tolBox.style.pointerEvents = e.target.checked ? 'none' : 'auto';
+    });
+
     // Export
     UI.btnNew.addEventListener('click', () => exportGPX(diffData.new, 'new_segments'));
     UI.btnDel.addEventListener('click', () => exportGPX(diffData.deleted, 'deleted_segments'));
@@ -130,7 +137,8 @@ async function runAnalysis() {
         const options = {
             tolerance: parseInt(UI.tolerance.value),
             analyzeTracks: UI.toggleTracks.checked,
-            analyzeWpts: UI.toggleWpt.checked
+            analyzeWpts: UI.toggleWpt.checked,
+            absoluteMode: UI.toggleAbs.checked
         };
 
         try {

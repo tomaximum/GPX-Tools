@@ -17,19 +17,20 @@ export function compareGPX(traceA, traceB, options) {
         const lineB = extractMainLine(traceB);
 
         if (lineA && lineB) {
-            // Optimization: Simplify the reference lines for the distance calculation
-            // This massively speeds up O(N*M) operations without losing much precision for diff
-            const simplifiedA = turf.simplify(lineA, { tolerance: 0.001, highQuality: false }); // ~1m tolerance
-            const simplifiedB = turf.simplify(lineB, { tolerance: 0.001, highQuality: false });
+            if (options.absoluteMode) {
+                // ABSOLUTE MODE: String identity matching
+                results.new = getAbsoluteDifference(lineB, lineA);
+                results.deleted = getAbsoluteDifference(lineA, lineB);
+                results.common = getAbsoluteIntersection(lineB, lineA);
+            } else {
+                // SMART MODE: Fuzzy distance matching
+                const simplifiedA = turf.simplify(lineA, { tolerance: 0.001, highQuality: false });
+                const simplifiedB = turf.simplify(lineB, { tolerance: 0.001, highQuality: false });
 
-            // New segments (Parts of B not in A)
-            results.new = getDifferenceOptimized(lineB, simplifiedA, toleranceKm);
-            
-            // Deleted segments (Parts of A not in B)
-            results.deleted = getDifferenceOptimized(lineA, simplifiedB, toleranceKm);
-            
-            // Common segments (Parts of B that are in A)
-            results.common = getIntersectionOptimized(lineB, simplifiedA, toleranceKm);
+                results.new = getDifferenceOptimized(lineB, simplifiedA, toleranceKm);
+                results.deleted = getDifferenceOptimized(lineA, simplifiedB, toleranceKm);
+                results.common = getIntersectionOptimized(lineB, simplifiedA, toleranceKm);
+            }
         }
     }
 
@@ -38,7 +39,7 @@ export function compareGPX(traceA, traceB, options) {
         const wptsB = traceB.features.filter(f => f.geometry.type === 'Point');
 
         if (wptsB.length > 0 || wptsA.length > 0) {
-            results.waypoints = comparePoints(wptsA, wptsB, toleranceKm);
+            results.waypoints = comparePoints(wptsA, wptsB, options.absoluteMode ? 0 : toleranceKm);
             
             if (results.new) results.new.features.push(...results.waypoints.new.features);
             else results.new = results.waypoints.new;
@@ -63,24 +64,59 @@ function extractMainLine(geojson) {
 }
 
 /**
- * Faster comparison using Point-to-Line distance instead of Buffer
+ * ABSOLUTE: High-performance identity matching using Sets
  */
+function getAbsoluteDifference(lineTarget, lineReference) {
+    const refSet = new Set(lineReference.geometry.coordinates.map(c => c.join(',')));
+    const segments = [];
+    let currentSegment = [];
+
+    lineTarget.geometry.coordinates.forEach((coord) => {
+        const key = coord.join(',');
+        if (!refSet.has(key)) {
+            currentSegment.push(coord);
+        } else {
+            if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
+            currentSegment = [];
+        }
+    });
+
+    if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
+    return segments.length > 0 ? turf.featureCollection(segments) : null;
+}
+
+function getAbsoluteIntersection(lineTarget, lineReference) {
+    const refSet = new Set(lineReference.geometry.coordinates.map(c => c.join(',')));
+    const segments = [];
+    let currentSegment = [];
+
+    lineTarget.geometry.coordinates.forEach((coord) => {
+        const key = coord.join(',');
+        if (refSet.has(key)) {
+            currentSegment.push(coord);
+        } else {
+            if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
+            currentSegment = [];
+        }
+    });
+
+    if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
+    return segments.length > 0 ? turf.featureCollection(segments) : null;
+}
+
 function getDifferenceOptimized(lineTarget, lineReference, toleranceKm) {
     const points = turf.explode(lineTarget);
     const segments = [];
     let currentSegment = [];
 
     points.features.forEach((pt) => {
-        // Point To Line Distance is O(M)
         const dist = turf.pointToLineDistance(pt, lineReference, { units: 'kilometers' });
         const isInside = dist <= toleranceKm;
         
         if (!isInside) {
             currentSegment.push(pt.geometry.coordinates);
         } else {
-            if (currentSegment.length > 1) {
-                segments.push(turf.lineString(currentSegment));
-            }
+            if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
             currentSegment = [];
         }
     });
@@ -101,9 +137,7 @@ function getIntersectionOptimized(lineTarget, lineReference, toleranceKm) {
         if (isInside) {
             currentSegment.push(pt.geometry.coordinates);
         } else {
-            if (currentSegment.length > 1) {
-                segments.push(turf.lineString(currentSegment));
-            }
+            if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
             currentSegment = [];
         }
     });
