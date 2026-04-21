@@ -7,23 +7,27 @@ import { exportGPX } from './exporter.js';
 
 let map, activeLayers = {};
 let traceA = null, traceB = null;
+let segmentsA = [], segmentsB = [];
 let diffData = null;
+let hoverLayer = null;
 
 const UI = {
     dropA: document.getElementById('drop-a'),
     dropB: document.getElementById('drop-b'),
+    listA: document.getElementById('list-a'),
+    listB: document.getElementById('list-b'),
     fileA: document.getElementById('file-a'),
     fileB: document.getElementById('file-b'),
     tolerance: document.getElementById('tolerance'),
     tolVal: document.getElementById('tol-val'),
     toggleTracks: document.getElementById('toggle-tracks'),
     toggleWpt: document.getElementById('toggle-waypoints'),
+    toggleAbs: document.getElementById('toggle-absolute'),
+    tolBox: document.getElementById('tolerance-box'),
     btnNew: document.getElementById('exp-new'),
     btnDel: document.getElementById('exp-del'),
     btnCom: document.getElementById('exp-com'),
     btnRun: document.getElementById('btn-run'),
-    toggleAbs: document.getElementById('toggle-absolute'),
-    tolBox: document.getElementById('tolerance-box'),
     mobileToggle: document.getElementById('mobile-toggle'),
     sidebar: document.getElementById('sidebar'),
     statsCard: document.getElementById('stats-card'),
@@ -81,7 +85,7 @@ function initListeners() {
     UI.btnRun.addEventListener('click', runAnalysis);
     UI.btnRun.disabled = true;
 
-    // Controls - No more runAnalysis on change
+    // Controls
     UI.tolerance.addEventListener('input', (e) => {
         UI.tolVal.innerText = e.target.value + 'm';
     });
@@ -111,28 +115,110 @@ async function handleFile(file, type) {
         const dom = new DOMParser().parseFromString(text, 'text/xml');
         const geojson = toGeoJSON.gpx(dom);
         
+        const lines = geojson.features.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
+        const processedSegments = lines.map((f, i) => ({
+            id: i,
+            name: f.properties.name || `Segment ${i + 1}`,
+            distance: turf.length(f, { units: 'kilometers' }).toFixed(1),
+            feature: f,
+            selected: false
+        }));
+
         if (type === 'A') {
             traceA = geojson;
+            segmentsA = processedSegments;
+            renderSegments(UI.listA, segmentsA, 'A');
             UI.dropA.querySelector('span').innerText = file.name;
             UI.dropA.classList.add('active');
         } else {
             traceB = geojson;
+            segmentsB = processedSegments;
+            renderSegments(UI.listB, segmentsB, 'B');
             UI.dropB.querySelector('span').innerText = file.name;
             UI.dropB.classList.add('active');
         }
 
+        smartAutoPair();
         UI.btnRun.disabled = !(traceA && traceB);
     };
     reader.readAsText(file);
 }
 
-async function runAnalysis() {
-    if (!traceA || !traceB) return;
+function renderSegments(container, segments, type) {
+    container.innerHTML = '';
+    segments.forEach(seg => {
+        const card = document.createElement('div');
+        card.className = `segment-card ${seg.selected ? 'selected' : ''}`;
+        card.innerHTML = `
+            <input type="checkbox" ${seg.selected ? 'checked' : ''}>
+            <div class="seg-info">
+                <span class="seg-name">${seg.name}</span>
+                <span class="seg-dist">${seg.distance} km</span>
+            </div>
+        `;
 
-    // Show loading state
+        card.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'INPUT') {
+                const cb = card.querySelector('input');
+                cb.checked = !cb.checked;
+            }
+            seg.selected = card.querySelector('input').checked;
+            card.classList.toggle('selected', seg.selected);
+        });
+
+        card.addEventListener('mouseenter', () => highlightOnMap(seg.feature));
+        card.addEventListener('mouseleave', () => clearHighlight());
+
+        container.appendChild(card);
+    });
+}
+
+function highlightOnMap(feature) {
+    clearHighlight();
+    hoverLayer = L.geoJSON(feature, {
+        style: { color: '#3498db', weight: 8, opacity: 0.6 }
+    }).addTo(map);
+}
+
+function clearHighlight() {
+    if (hoverLayer) {
+        map.removeLayer(hoverLayer);
+        hoverLayer = null;
+    }
+}
+
+function smartAutoPair() {
+    if (segmentsA.length === 0 || segmentsB.length === 0) return;
+
+    // Default: select first of each if nothing selected
+    if (!segmentsA.some(s => s.selected)) {
+        segmentsA[0].selected = true;
+        renderSegments(UI.listA, segmentsA, 'A');
+    }
+    
+    if (!segmentsB.some(s => s.selected)) {
+        // Try to match name or index
+        const firstA = segmentsA.find(s => s.selected);
+        let match = segmentsB.find(s => s.name === firstA.name);
+        if (!match && segmentsB[firstA.id]) match = segmentsB[firstA.id];
+        if (!match) match = segmentsB[0];
+        
+        match.selected = true;
+        renderSegments(UI.listB, segmentsB, 'B');
+    }
+}
+
+async function runAnalysis() {
+    const selectedA = segmentsA.filter(s => s.selected).map(s => s.feature);
+    const selectedB = segmentsB.filter(s => s.selected).map(s => s.feature);
+
+    if (selectedA.length === 0 || selectedB.length === 0) {
+        alert("Veuillez sélectionner au moins un segment dans chaque trace.");
+        return;
+    }
+
     UI.sidebar.classList.add('is-loading');
     
-    // Give browser time to render loading state
     setTimeout(() => {
         const options = {
             tolerance: parseInt(UI.tolerance.value),
@@ -142,11 +228,14 @@ async function runAnalysis() {
         };
 
         try {
-            diffData = compareGPX(traceA, traceB, options);
-            renderOnMap(diffData);
-            updateStats(traceA, traceB);
+            // Prepare merged features for comparison (as requested)
+            const collectionA = turf.featureCollection([...selectedA, ...traceA.features.filter(f => f.geometry.type === 'Point')]);
+            const collectionB = turf.featureCollection([...selectedB, ...traceB.features.filter(f => f.geometry.type === 'Point')]);
 
-            // Enable Exports
+            diffData = compareGPX(collectionA, collectionB, options);
+            renderOnMap(diffData);
+            updateStats(collectionA, collectionB);
+
             UI.btnNew.disabled = !(diffData && diffData.new);
             UI.btnDel.disabled = !(diffData && diffData.deleted);
             UI.btnCom.disabled = !(diffData && diffData.common);
@@ -159,7 +248,6 @@ async function runAnalysis() {
 }
 
 function renderOnMap(data) {
-    // Clear previous layers
     Object.values(activeLayers).forEach(l => map.removeLayer(l));
     activeLayers = {};
 
@@ -169,14 +257,7 @@ function renderOnMap(data) {
         deleted: { color: '#e74c3c', weight: 5, opacity: 1, dashArray: '5, 10' }
     };
 
-    const pointStyle = (color) => ({
-        radius: 6,
-        fillColor: color,
-        color: "#fff",
-        weight: 1,
-        opacity: 1,
-        fillOpacity: 0.8
-    });
+    const pointStyle = (color) => ({ radius: 6, fillColor: color, color: "#fff", weight: 1, opacity: 1, fillOpacity: 0.8 });
 
     if (data.common) activeLayers.common = L.geoJSON(data.common, { 
         style: styles.common,
@@ -193,7 +274,6 @@ function renderOnMap(data) {
         pointToLayer: (f, latlng) => L.circleMarker(latlng, pointStyle(styles.deleted.color))
     }).addTo(map);
 
-    // Zoom to fit
     const combined = L.featureGroup(Object.values(activeLayers));
     if (combined.getLayers().length > 0) {
         map.fitBounds(combined.getBounds(), { padding: [20, 20] });
