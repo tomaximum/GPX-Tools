@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GPX Smart Diff | Adventure Tools</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1>GPX TOOLS</h1>
+                <p>Adventure Intelligence System</p>
+            </div>
+
+            <div class="sidebar-content">
+                <!-- Drop Zones -->
+                <div class="drop-zone" id="drop-a">
+                    <i class="fas fa-history"></i>
+                    <span>Trace A (Base)</span>
+                    <input type="file" id="file-a" accept=".gpx" hidden>
+                </div>
+                
+                <div class="drop-zone" id="drop-b">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Trace B (Comparaison)</span>
+                    <input type="file" id="file-b" accept=".gpx" hidden>
+                </div>
+
+                <div class="stats-card" id="stats-card" style="display:none;">
+                    <div class="stat-item">
+                        <span class="label">Total A</span>
+                        <span class="value" id="stat-dist-a">0 km</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="label">Total B</span>
+                        <span class="value" id="stat-dist-b">0 km</span>
+                    </div>
+                </div>
+
+                <!-- Settings -->
+                <div class="settings-group">
+                    <h3>ANALYSE</h3>
+                    
+                    <div class="control-row">
+                        <span>Tracés</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-tracks" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    
+                    <div class="control-row">
+                        <span>Waypoints</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-waypoints">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="tolerance-box">
+                        <div class="label-row">
+                            <span>Tolérance</span>
+                            <span id="tol-val">25m</span>
+                        </div>
+                        <input type="range" id="tolerance" min="5" max="200" value="25" step="5">
+                    </div>
+                </div>
+
+                <!-- Export Section -->
+                <div class="settings-group export-group">
+                    <h3>EXPORTS</h3>
+                    <div class="export-grid">
+                        <button class="export-btn orange" id="exp-new" disabled title="Parties ajoutées">
+                            <i class="fas fa-download"></i> Nouveautés
+                        </button>
+                        <button class="export-btn red" id="exp-del" disabled title="Parties supprimées">
+                            <i class="fas fa-trash-alt"></i> Suppressions
+                        </button>
+                        <button class="export-btn grey" id="exp-com" disabled title="Parties identiques">
+                            <i class="fas fa-equals"></i> Communs
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="mobile-toggle" id="mobile-toggle">
+                <i class="fas fa-chevron-up"></i>
+            </button>
+        </aside>
+
+        <!-- Map Container -->
+        <main class="map-container" id="map"></main>
+    </div>
+
+    <!-- JS Libs -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <script src="https://unpkg.com/@tmcw/togeojson"></script>
+    
+    <!-- App JS -->
+    <script src="js/main.js" type="module"></script>
+</body>
+</html>

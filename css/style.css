@@ -1,0 +1,299 @@
+:root {
+    --bg-dark: #0a0b0d;
+    --sidebar-bg: rgba(20, 22, 26, 0.85);
+    --accent: #f39c12;
+    --accent-red: #e74c3c;
+    --accent-green: #2ecc71;
+    --accent-grey: #95a5a6;
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Outfit', sans-serif;
+}
+
+body, html {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background-color: var(--bg-dark);
+}
+
+.app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Sidebar Styling */
+.sidebar {
+    width: 320px;
+    height: 100%;
+    background: var(--sidebar-bg);
+    backdrop-filter: blur(15px);
+    border-right: 1px solid var(--glass-border);
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 1.5rem;
+    z-index: 1000;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+}
+
+.sidebar-header p {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2rem;
+}
+
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* Drop Zones */
+.drop-zone {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px dashed var(--glass-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.drop-zone:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--accent);
+}
+
+.drop-zone.active {
+    border-color: var(--accent-green);
+    background: rgba(46, 204, 113, 0.05);
+}
+
+.drop-zone i {
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+}
+
+.drop-zone span {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+/* Stats Card */
+.stats-card {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-item .label {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.stat-item .value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+/* Control Rows (Switches) */
+.settings-group {
+    margin-bottom: 2rem;
+}
+
+.settings-group h3 {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+    margin-bottom: 1rem;
+}
+
+.control-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+/* Switches */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #333;
+    transition: .3s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 14px; width: 14px;
+    left: 3px; bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+}
+
+input:checked + .slider { background-color: var(--accent); }
+input:checked + .slider:before { transform: translateX(20px); }
+
+/* Range Slider */
+.tolerance-box {
+    margin-top: 1.5rem;
+}
+
+.label-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+#tolerance {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* Export Buttons */
+.export-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+}
+
+.export-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 0.8rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+.export-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.export-btn.orange { background: var(--accent); }
+.export-btn.red { background: var(--accent-red); }
+.export-btn.grey { background: var(--accent-grey); }
+
+.export-btn:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+/* Map Container */
+.map-container {
+    flex: 1;
+    background: var(--bg-dark);
+}
+
+/* Custom Leaflet Dark Elements */
+.leaflet-container { background: #111 !important; }
+
+/* Mobile Adaptations */
+.mobile-toggle { display: none; }
+
+@media (max-width: 768px) {
+    .app-container { flex-direction: column; }
+    
+    .sidebar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: auto;
+        max-height: 80vh;
+        border-right: none;
+        border-top: 1px solid var(--glass-border);
+        border-radius: 20px 20px 0 0;
+        transform: translateY(calc(100% - 60px));
+        padding-top: 1rem;
+    }
+
+    .sidebar.open {
+        transform: translateY(0);
+    }
+
+    .mobile-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 30px;
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        width: 100%;
+        cursor: pointer;
+        padding-bottom: 1rem;
+    }
+
+    .sidebar.open .mobile-toggle i {
+        transform: rotate(180deg);
+    }
+
+    .sidebar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .sidebar-header p { margin-bottom: 1rem; }
+
+    .map-container {
+        height: calc(100vh - 60px);
+        width: 100vw;
+    }
+}
