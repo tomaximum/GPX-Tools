@@ -250,7 +250,7 @@ function renderOnMap(data) {
     activeLayers = {};
 
     const styles = {
-        common: { color: '#95a5a6', weight: 2, opacity: 0.4 },
+        common: { color: '#636e72', weight: 4, opacity: 0.8 },
         new: { color: '#2ecc71', weight: 6, opacity: 1 },
         deleted: { color: '#e74c3c', weight: 6, opacity: 1 }
     };
