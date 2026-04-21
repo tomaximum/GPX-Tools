@@ -1,6 +1,6 @@
 /**
  * GPX Smart Diff - Geospatial Engine (Turf.js) Optimized
- * VERSION 3.7.0 - Merge-First Logic (Fixes Disjointed Segments)
+ * VERSION 3.8.0 - Total Continuity (Common/New/Deleted)
  */
 
 export function compareGPX(traceA, traceB, options) {
@@ -37,6 +37,7 @@ export function compareGPX(traceA, traceB, options) {
         if (wptsB.length > 0 || wptsA.length > 0) {
             results.waypoints = comparePoints(wptsA, wptsB, options.absoluteMode ? 0 : toleranceKm);
             
+            // Add as features to ensure they are cleaned less aggressively
             if (results.new) results.new.features.push(...results.waypoints.new.features);
             else results.new = results.waypoints.new;
 
@@ -71,24 +72,23 @@ function extractMainLine(geojson) {
     return turf.multiLineString(coords);
 }
 
-/**
- * FIXED: Merge segments BEFORE cleaning tiny ones.
- * This ensures "suture" fragments aren't deleted before being attached.
- */
 function mergeAndCleanSegments(featureCollection) {
     if (!featureCollection || featureCollection.features.length === 0) return null;
     
-    const MIN_LENGTH_KM = 0.03; 
-    const JOIN_DISTANCE_KM = 0.08; 
+    const MIN_LENGTH_KM = 0.02; // 20m
+    const JOIN_DISTANCE_KM = 0.1; 
 
-    const features = featureCollection.features;
+    // Handle mix of points and lines
+    const lineFeatures = featureCollection.features.filter(f => f.geometry.type === 'LineString');
+    const otherFeatures = featureCollection.features.filter(f => f.geometry.type !== 'LineString');
 
-    // 1. Greedy Merge FIRST
+    if (lineFeatures.length === 0) return featureCollection;
+
     const merged = [];
-    let current = features[0];
+    let current = lineFeatures[0];
 
-    for (let i = 1; i < features.length; i++) {
-        const next = features[i];
+    for (let i = 1; i < lineFeatures.length; i++) {
+        const next = lineFeatures[i];
         const lastCoord = current.geometry.coordinates[current.geometry.coordinates.length - 1];
         const firstCoord = next.geometry.coordinates[0];
         const gap = turf.distance(lastCoord, firstCoord, { units: 'kilometers' });
@@ -103,12 +103,8 @@ function mergeAndCleanSegments(featureCollection) {
     }
     merged.push(current);
 
-    // 2. Clean tiny isolated fragments LAST
-    const cleaned = merged.filter(f => {
-        return turf.length(f, { units: 'kilometers' }) > MIN_LENGTH_KM;
-    });
-
-    return cleaned.length > 0 ? turf.featureCollection(cleaned) : null;
+    const cleaned = merged.filter(f => turf.length(f, { units: 'kilometers' }) > MIN_LENGTH_KM);
+    return turf.featureCollection([...cleaned, ...otherFeatures]);
 }
 
 function getAbsoluteDifference(lineTarget, lineReference) {
@@ -120,9 +116,7 @@ function getAbsoluteDifference(lineTarget, lineReference) {
 
     targetCoords.forEach((coord, i) => {
         if (!refSet.has(coord.join(','))) {
-            if (currentSegment.length === 0 && i > 0) {
-                currentSegment.push(targetCoords[i-1]);
-            }
+            if (currentSegment.length === 0 && i > 0) currentSegment.push(targetCoords[i-1]);
             currentSegment.push(coord);
         } else {
             if (currentSegment.length > 0) {
@@ -144,11 +138,15 @@ function getAbsoluteIntersection(lineTarget, lineReference) {
     const segments = [];
     let currentSegment = [];
 
-    targetCoords.forEach((coord) => {
+    targetCoords.forEach((coord, i) => {
         if (refSet.has(coord.join(','))) {
+            if (currentSegment.length === 0 && i > 0) currentSegment.push(targetCoords[i-1]);
             currentSegment.push(coord);
         } else {
-            if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
+            if (currentSegment.length > 0) {
+                currentSegment.push(coord);
+                if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
+            }
             currentSegment = [];
         }
     });
@@ -173,11 +171,8 @@ function getDifferenceOptimized(lineTarget, lineReference, toleranceKm) {
     points.features.forEach((pt, i) => {
         const dist = turf.pointToLineDistance(pt, refGeom, { units: 'kilometers' });
         const isInside = dist <= toleranceKm;
-        
         if (!isInside) {
-            if (currentSegment.length === 0 && i > 0) {
-                currentSegment.push(points.features[i-1].geometry.coordinates);
-            }
+            if (currentSegment.length === 0 && i > 0) currentSegment.push(points.features[i-1].geometry.coordinates);
             currentSegment.push(pt.geometry.coordinates);
         } else {
             if (currentSegment.length > 0) {
@@ -198,14 +193,17 @@ function getIntersectionOptimized(lineTarget, lineReference, toleranceKm) {
     const segments = [];
     let currentSegment = [];
 
-    points.features.forEach((pt) => {
+    points.features.forEach((pt, i) => {
         const dist = turf.pointToLineDistance(pt, refGeom, { units: 'kilometers' });
         const isInside = dist <= toleranceKm;
-        
         if (isInside) {
+            if (currentSegment.length === 0 && i > 0) currentSegment.push(points.features[i-1].geometry.coordinates);
             currentSegment.push(pt.geometry.coordinates);
         } else {
-            if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
+            if (currentSegment.length > 0) {
+                currentSegment.push(pt.geometry.coordinates);
+                if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
+            }
             currentSegment = [];
         }
     });
