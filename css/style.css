@@ -199,6 +199,37 @@ input:checked + .slider:before { transform: translateX(20px); }
     cursor: pointer;
 }
 
+.run-btn {
+    width: 100%;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 1rem;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin: 1.5rem 0 2rem 0;
+    box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+}
+
+.run-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(243, 156, 18, 0.5);
+}
+
+.run-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background: #444;
+    box-shadow: none;
+}
+
 /* Export Buttons */
 .export-grid {
     display: grid;

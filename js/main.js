@@ -21,6 +21,7 @@ const UI = {
     btnNew: document.getElementById('exp-new'),
     btnDel: document.getElementById('exp-del'),
     btnCom: document.getElementById('exp-com'),
+    btnRun: document.getElementById('btn-run'),
     mobileToggle: document.getElementById('mobile-toggle'),
     sidebar: document.getElementById('sidebar'),
     statsCard: document.getElementById('stats-card'),
@@ -74,13 +75,14 @@ function initListeners() {
     UI.fileA.addEventListener('change', (e) => handleFile(e.target.files[0], 'A'));
     UI.fileB.addEventListener('change', (e) => handleFile(e.target.files[0], 'B'));
 
-    // Controls
+    // Manual Run Button
+    UI.btnRun.addEventListener('click', runAnalysis);
+    UI.btnRun.disabled = true;
+
+    // Controls - No more runAnalysis on change
     UI.tolerance.addEventListener('input', (e) => {
         UI.tolVal.innerText = e.target.value + 'm';
     });
-    UI.tolerance.addEventListener('change', runAnalysis);
-    UI.toggleTracks.addEventListener('change', runAnalysis);
-    UI.toggleWpt.addEventListener('change', runAnalysis);
 
     // Export
     UI.btnNew.addEventListener('click', () => exportGPX(diffData.new, 'new_segments'));
@@ -112,7 +114,7 @@ async function handleFile(file, type) {
             UI.dropB.classList.add('active');
         }
 
-        runAnalysis();
+        UI.btnRun.disabled = !(traceA && traceB);
     };
     reader.readAsText(file);
 }
