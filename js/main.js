@@ -254,7 +254,7 @@ function renderOnMap(data) {
     const styles = {
         common: { color: '#95a5a6', weight: 4, opacity: 0.8 },
         new: { color: '#2ecc71', weight: 5, opacity: 1 },
-        deleted: { color: '#e74c3c', weight: 5, opacity: 1, dashArray: '5, 10' }
+        deleted: { color: '#e74c3c', weight: 5, opacity: 1 }
     };
 
     const pointStyle = (color) => ({ radius: 6, fillColor: color, color: "#fff", weight: 1, opacity: 1, fillOpacity: 0.8 });

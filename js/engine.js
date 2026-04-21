@@ -1,5 +1,6 @@
 /**
  * GPX Smart Diff - Geospatial Engine (Turf.js) Optimized
+ * VERSION 3.2.0 - High Precision Fix
  */
 
 export function compareGPX(traceA, traceB, options) {
@@ -22,13 +23,14 @@ export function compareGPX(traceA, traceB, options) {
                 results.deleted = getAbsoluteDifference(lineA, lineB);
                 results.common = getAbsoluteIntersection(lineB, lineA);
             } else {
-                // IMPORTANT: Use higher precision for reference to avoid jitter
-                const simplifiedA = turf.simplify(lineA, { tolerance: 0.0005, highQuality: true });
-                const simplifiedB = turf.simplify(lineB, { tolerance: 0.0005, highQuality: true });
-
-                results.new = cleanSegments(getDifferenceOptimized(lineB, simplifiedA, toleranceKm));
-                results.deleted = cleanSegments(getDifferenceOptimized(lineA, simplifiedB, toleranceKm));
-                results.common = cleanSegments(getIntersectionOptimized(lineB, simplifiedA, toleranceKm));
+                /**
+                 * FIX: COMPLETELY REMOVED simplification on reference lines.
+                 * Simplification was shifting points and creating false positives/jitter.
+                 * We now use raw coordinates for 100% precision.
+                 */
+                results.new = cleanSegments(getDifferenceOptimized(lineB, lineA, toleranceKm));
+                results.deleted = cleanSegments(getDifferenceOptimized(lineA, lineB, toleranceKm));
+                results.common = cleanSegments(getIntersectionOptimized(lineB, lineA, toleranceKm));
             }
         }
     }
@@ -54,29 +56,18 @@ export function compareGPX(traceA, traceB, options) {
     return results;
 }
 
-/**
- * FIX: Preserve segments using MultiLineString instead of flatMap
- * This prevents "ghost lines" between disconnected segments.
- */
 function extractMainLine(geojson) {
     const lines = geojson.features.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
     if (lines.length === 0) return null;
     if (lines.length === 1) return lines[0];
 
-    // Combine all coordinates into a MultiLineString to preserve gaps
-    const allCoords = lines.map(f => {
-        if (f.geometry.type === 'LineString') return f.geometry.coordinates;
-        return f.geometry.coordinates; // MultiLineString already nested, simplify here
-    }).flat(1);
-    
-    // We want a MultiLineString where each entry is a valid LineString coord array
+    // Return a MultiLineString to keep segments disconnected (avoid ghost lines)
     return turf.multiLineString(lines.map(f => {
         if (f.geometry.type === 'LineString') return f.geometry.coordinates;
         return f.geometry.coordinates; 
-    }).flat(f => f.geometry.type === 'MultiLineString' ? 0 : 1)); // Handle potential nesting
+    }).flat(f => f.geometry.type === 'MultiLineString' ? 0 : 1));
 }
 
-// Robust MultiLineString extraction
 function getReferenceLines(geojson) {
     const features = geojson.features.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
     const coords = [];
@@ -87,12 +78,9 @@ function getReferenceLines(geojson) {
     return turf.multiLineString(coords);
 }
 
-/**
- * Filter tiny segments (noise) and smooth results
- */
 function cleanSegments(featureCollection) {
     if (!featureCollection) return null;
-    const MIN_LENGTH_KM = 0.03; // 30 meters
+    const MIN_LENGTH_KM = 0.01; // Reduced to 10m to allow detecting very small actual changes
     
     const validFeatures = featureCollection.features.filter(f => {
         const len = turf.length(f, { units: 'kilometers' });
@@ -103,20 +91,15 @@ function cleanSegments(featureCollection) {
 }
 
 function getAbsoluteDifference(lineTarget, lineReference) {
-    const refCoords = lineReference.geometry.type === 'MultiLineString' 
-        ? lineReference.geometry.coordinates.flat(1) 
-        : lineReference.geometry.coordinates;
+    const refCoords = getFlatCoords(lineReference);
     const refSet = new Set(refCoords.map(c => c.join(',')));
+    const targetCoords = getFlatCoords(lineTarget);
     
     const segments = [];
-    const targetCoords = lineTarget.geometry.type === 'MultiLineString' 
-        ? lineTarget.geometry.coordinates.flat(1) 
-        : lineTarget.geometry.coordinates;
-
     let currentSegment = [];
+
     targetCoords.forEach((coord) => {
-        const key = coord.join(',');
-        if (!refSet.has(key)) {
+        if (!refSet.has(coord.join(','))) {
             currentSegment.push(coord);
         } else {
             if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
@@ -129,20 +112,15 @@ function getAbsoluteDifference(lineTarget, lineReference) {
 }
 
 function getAbsoluteIntersection(lineTarget, lineReference) {
-    const refCoords = lineReference.geometry.type === 'MultiLineString' 
-        ? lineReference.geometry.coordinates.flat(1) 
-        : lineReference.geometry.coordinates;
+    const refCoords = getFlatCoords(lineReference);
     const refSet = new Set(refCoords.map(c => c.join(',')));
-    
-    const segments = [];
-    const targetCoords = lineTarget.geometry.type === 'MultiLineString' 
-        ? lineTarget.geometry.coordinates.flat(1) 
-        : lineTarget.geometry.coordinates;
+    const targetCoords = getFlatCoords(lineTarget);
 
+    const segments = [];
     let currentSegment = [];
+
     targetCoords.forEach((coord) => {
-        const key = coord.join(',');
-        if (refSet.has(key)) {
+        if (refSet.has(coord.join(','))) {
             currentSegment.push(coord);
         } else {
             if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
@@ -152,6 +130,13 @@ function getAbsoluteIntersection(lineTarget, lineReference) {
 
     if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
     return segments.length > 0 ? turf.featureCollection(segments) : null;
+}
+
+function getFlatCoords(geometry) {
+    if (geometry.geometry) geometry = geometry.geometry;
+    if (geometry.type === 'LineString') return geometry.coordinates;
+    if (geometry.type === 'MultiLineString') return geometry.coordinates.flat(1);
+    return [];
 }
 
 function getDifferenceOptimized(lineTarget, lineReference, toleranceKm) {
