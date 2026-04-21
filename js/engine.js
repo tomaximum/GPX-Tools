@@ -1,6 +1,6 @@
 /**
  * GPX Smart Diff - Geospatial Engine (Turf.js) Optimized
- * VERSION 3.6.0 - Segment Suture & Continuity Fix
+ * VERSION 3.7.0 - Merge-First Logic (Fixes Disjointed Segments)
  */
 
 export function compareGPX(traceA, traceB, options) {
@@ -19,13 +19,13 @@ export function compareGPX(traceA, traceB, options) {
 
         if (lineA && lineB) {
             if (options.absoluteMode) {
-                results.new = cleanAndMergeSegments(getAbsoluteDifference(lineB, lineA));
-                results.deleted = cleanAndMergeSegments(getAbsoluteDifference(lineA, lineB));
-                results.common = cleanAndMergeSegments(getAbsoluteIntersection(lineB, lineA));
+                results.new = mergeAndCleanSegments(getAbsoluteDifference(lineB, lineA));
+                results.deleted = mergeAndCleanSegments(getAbsoluteDifference(lineA, lineB));
+                results.common = mergeAndCleanSegments(getAbsoluteIntersection(lineB, lineA));
             } else {
-                results.new = cleanAndMergeSegments(getDifferenceOptimized(lineB, lineA, toleranceKm));
-                results.deleted = cleanAndMergeSegments(getDifferenceOptimized(lineA, lineB, toleranceKm));
-                results.common = cleanAndMergeSegments(getIntersectionOptimized(lineB, lineA, toleranceKm));
+                results.new = mergeAndCleanSegments(getDifferenceOptimized(lineB, lineA, toleranceKm));
+                results.deleted = mergeAndCleanSegments(getDifferenceOptimized(lineA, lineB, toleranceKm));
+                results.common = mergeAndCleanSegments(getIntersectionOptimized(lineB, lineA, toleranceKm));
             }
         }
     }
@@ -71,18 +71,19 @@ function extractMainLine(geojson) {
     return turf.multiLineString(coords);
 }
 
-function cleanAndMergeSegments(featureCollection) {
+/**
+ * FIXED: Merge segments BEFORE cleaning tiny ones.
+ * This ensures "suture" fragments aren't deleted before being attached.
+ */
+function mergeAndCleanSegments(featureCollection) {
     if (!featureCollection || featureCollection.features.length === 0) return null;
     
     const MIN_LENGTH_KM = 0.03; 
     const JOIN_DISTANCE_KM = 0.08; 
 
-    let features = featureCollection.features.filter(f => {
-        return turf.length(f, { units: 'kilometers' }) > MIN_LENGTH_KM;
-    });
+    const features = featureCollection.features;
 
-    if (features.length === 0) return null;
-
+    // 1. Greedy Merge FIRST
     const merged = [];
     let current = features[0];
 
@@ -101,7 +102,13 @@ function cleanAndMergeSegments(featureCollection) {
         }
     }
     merged.push(current);
-    return turf.featureCollection(merged);
+
+    // 2. Clean tiny isolated fragments LAST
+    const cleaned = merged.filter(f => {
+        return turf.length(f, { units: 'kilometers' }) > MIN_LENGTH_KM;
+    });
+
+    return cleaned.length > 0 ? turf.featureCollection(cleaned) : null;
 }
 
 function getAbsoluteDifference(lineTarget, lineReference) {
@@ -113,14 +120,13 @@ function getAbsoluteDifference(lineTarget, lineReference) {
 
     targetCoords.forEach((coord, i) => {
         if (!refSet.has(coord.join(','))) {
-            // Suture: Add previous point (common) if starting a new segment
             if (currentSegment.length === 0 && i > 0) {
                 currentSegment.push(targetCoords[i-1]);
             }
             currentSegment.push(coord);
         } else {
             if (currentSegment.length > 0) {
-                currentSegment.push(coord); // Suture: Add current point (common) to end the segment
+                currentSegment.push(coord);
                 if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
             }
             currentSegment = [];
@@ -169,14 +175,12 @@ function getDifferenceOptimized(lineTarget, lineReference, toleranceKm) {
         const isInside = dist <= toleranceKm;
         
         if (!isInside) {
-            // Suture: If starting a new segment, add the previous point (which was common)
             if (currentSegment.length === 0 && i > 0) {
                 currentSegment.push(points.features[i-1].geometry.coordinates);
             }
             currentSegment.push(pt.geometry.coordinates);
         } else {
             if (currentSegment.length > 0) {
-                // Suture: Add the current point (which is now common) to close the gap
                 currentSegment.push(pt.geometry.coordinates);
                 if (currentSegment.length > 1) segments.push(turf.lineString(currentSegment));
             }
